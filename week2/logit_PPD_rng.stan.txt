@@ -1,0 +1,19 @@
+functions { /* saved as logit_PPD_rng.stan */
+  matrix 
+    logit_PPD_rng(int S, vector x, real a_loc,
+                  real a_scale, real b_loc, 
+                  real b_scale) {
+    int N = rows(x); matrix[S, N] y_tilde;
+    vector[N] x_ = x - mean(x);    
+    for (s in 1:S) {
+      real alpha = normal_rng(a_loc, a_scale);
+      real beta = normal_rng(b_loc, b_scale);
+      vector[N] eta = alpha + beta * x_;
+      for (n in 1:N) {
+        real utils = eta[n] + logistic_rng(0, 1);
+        y_tilde[s, n] = utils > 0;
+      }
+    }
+    return y_tilde;  
+  }
+}

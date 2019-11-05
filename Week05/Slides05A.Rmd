@@ -1,0 +1,269 @@
+---
+title: "Markov Chain Monte Carlo"
+author: "Ben Goodrich"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+autosize: true
+header-includes:
+   - \usepackage{amsmath}
+   - \usepackage{amssymb}
+   - \usepackage{color}
+output:
+  ioslides_presentation:
+    widescreen: yes
+editor_options: 
+  chunk_output_type: console
+---
+<style type="text/css">
+slides > slide:not(.nobackground):after {
+  content: '';
+}
+</style>
+
+```{r setup, include=FALSE}
+options(width = 90)
+library(knitr)
+library(rgl)
+knit_hooks$set(rgl = hook_plot_custom)
+knit_hooks$set(small.mar = function(before, options, envir) {
+    if (before) par(mar = c(4, 4, .1, .1), las = 1)  # smaller margin on top and right
+})
+```
+
+## Obligatory Disclosure
+
+* Ben is an employee of Columbia University, which has received several research grants to develop Stan
+* Ben is also a manager of GG Statistics LLC, which uses Stan for business purposes
+* According to Columbia University 
+  [policy](https://research.columbia.edu/content/conflict-interest-and-research), any such employee who 
+  has any equity stake in, a title (such as officer or director) with, or is expected to earn at least 
+  $\$5,000.00$ per year from a private company is required to disclose these facts in presentations
+
+## Drawing from a Uniform Distribution
+
+* Randomness can be harvested from physical sources, but it is expensive
+* Modern Intel processors have a (possibly) [true random-number generator](https://en.wikipedia.org/wiki/RdRand)
+* In practice, software emulates a true random-number generator for speed
+* Let $K = -1 + 2^{64} = 18,446,744,073,709,551,615$ be the largest unsigned integer that a 64-bit
+  computer can represent. You can essentially draw uniformally from $\Omega_U = \left[0,1\right)$ by
+    1. Drawing $\tilde{y}$ from $\Omega_Y = \{0,1,\dots,K\}$ with each probability $\frac{1.0}{K}$
+    2. Letting $\tilde{u} = \frac{\tilde{y}}{1.0 + K}$, which casts to a double-precision denominator
+* The CDF of the uniform distribution on $\left(a,b\right)$ is 
+  $F\left(\left.u\right|a,b\right) = \frac{u - a}{b - a}$ and the PDF is 
+  $f\left(\left.u\right|a,b\right) = \frac{1}{b - a}$. Standard is a special case with $a = 0$ and $b = 1$.
+
+
+## Drawing from an Exponential Distribution {.build}
+
+```{r, echo = FALSE, small.mar = TRUE, fig.height=3, fig.width=9}
+curve(pexp(x), from = 0, to = 5, ylab = "F(x) = 1 - e^x")
+```
+
+- To draw from this (standard exponential) distribution, you could
+    1. Draw $\tilde{u}$ from a standard uniform distribution
+    2. Find the point on the curve with height $\tilde{u}$
+    3. Drop to the horizontal axis at $\tilde{x}$ to get a standard exponential realization
+    4. Optionally scale $\tilde{x}$ by a given $\mu$ to make it non-standard
+    
+## Inverse CDF Sampling of Continuous RVs
+    
+> - In principle, the previous implies an algorithm to draw from ANY univariate continuous distribution
+> - But to draw efficiently from it, it is best to work out (if possible)
+  $F^{-1}\left(u\right) = x\left(u\right)$, which is known as the inverse CDF from $\left(0,1\right)$
+  to $\Omega_X$
+> - For example, if $u\left(x\right) = 1 - e^x$, then 
+  $x\left(u\right) = \ln\left(1-u\right) = F^{-1}\left(u\right)$
+> - If $U$ is distributed standard uniform and $X = F^{-1}\left(U\right)$
+  what is the PDF of $X$?
+> - Since $u = F\left(x\right)$ has a constant density of $1$ and
+  $\frac{\partial}{\partial x}u\left(x\right) = \frac{\partial}{\partial x}F\left(x\right) = 
+  f\left(u\left(x\right)\right)$, the PDF of $X$ is whatever $f\left(x\right)$ is
+> - If $F\left(x\right)$ does not have an explicit form, you may have to numerically
+  solve for $\tilde{x}$ such that $F\left(\tilde{x}\right) = \tilde{u}$
+  
+    
+
+## Bivariate Normal Distribution
+
+The PDF of the bivariate normal distribution over $\Omega = \mathbb{R}^2$ is
+$$f\left(\left.x,y\right|\mu_X,\mu_Y,\sigma_X,\sigma_Y,\rho\right) = \\
+\frac{1}{2\pi\sigma_X\sigma_Y\sqrt{1-\rho^2}}e^{-\frac{1}{2\left(1-\rho^2\right)}
+\left(\left(\frac{x - \mu_X}{\sigma_X}\right)^2 + 
+\left(\frac{y - \mu_Y}{\sigma_Y}\right)^2 - 
+2\rho\frac{x - \mu_X}{\sigma_X}\frac{y - \mu_Y}{\sigma_Y}\right)} = \\
+\frac{1}{\sigma_X\sqrt{2\pi}}e^{-\frac{1}{2}\left(\frac{x - \mu_X}{\sigma_X}\right)^2} \times
+\frac{1}{\color{blue}{\sigma}\sqrt{2\pi}}e^{-\frac{1}{2}
+\left(\frac{y - \color{red}{\left(\mu_y + \beta\left(x-\mu_X\right)\right)}}
+{\color{blue}{\sigma}}\right)^2},$$ where $X$ is MARGINALLY normal and $\left.Y\right|X$
+is CONDITIONALLY normal with expectation $\color{red}{\mu_Y + \beta\left(x-\mu_X\right)}$ 
+and standard deviation $\color{blue}{\sigma = \sigma_Y\sqrt{1-\rho^2}}$, where 
+$\color{red}{\beta = \rho\frac{\sigma_Y}{\sigma_X}}$ is the OLS coefficient when $Y$ is regressed on $X$
+and $\sigma$ is the error standard deviation. We can thus draw $\tilde{x}$ and then 
+condition on it to draw $\tilde{y}$.
+
+## Drawing from the Bivariate Normal Distribution
+
+```{r, echo = FALSE, comment = ""}
+cat(readLines("binormal_rng.stan"), sep = "\n")
+```
+```{r}
+rstan::expose_stan_functions("binormal_rng.stan")
+S <- 1000; mu_X <- 0; mu_Y <- 0; sigma_X <- 1; sigma_Y <- 1; rho <- 0.75
+indep <- replicate(26, colMeans(binormal_rng(S = 100, mu_X, mu_Y, sigma_X, sigma_Y, rho)))
+rownames(indep) <- c("x", "y"); colnames(indep) <- letters
+```
+
+## Markov Processes
+
+* A Markov process is a sequence of random variables with a particular dependence
+  structure where the future is conditionally independent of the past given the present,
+  but nothing is marginally independent of anything else
+* An AR1 model is a linear Markov process
+* Let $X_s$ have conditional PDF $f_s\left(\left.X_s\right|X_{s - 1}\right)$. Their
+  joint PDF is
+  $$f\left(X_0, X_1, \dots, X_{S - 1}, X_S\right) = 
+  f_0\left(X_0\right) \prod_{s = 1}^S f_s\left(\left.X_s\right|X_{s - 1}\right)$$
+* Can we construct a Markov process such that the marginal distribution of $X_S$
+  is a given target distribution as $S\uparrow \infty$?
+* If so, they you can get a random draw --- or a set of dependent draws --- from 
+  the target distribution by letting that Markov process run for a long time
+* Basic idea is that you can marginalize by going through a lot of conditionals  
+
+## Metropolis-Hastings Markov Chain Monte Carlo
+
+* Suppose you want to draw from some distribution whose PDF is 
+$f\left(\left.\boldsymbol{\theta}\right|\dots\right)$
+but do not have a customized algorithm to do so. 
+* Initialize $\boldsymbol{\theta}$ to some value in $\Theta$ and then repeat $S$ times:
+
+    1. Draw a proposal for $\boldsymbol{\theta}$, say $\boldsymbol{\theta}^\prime$, from
+      a distribution whose PDF is $q\left(\left.\boldsymbol{\theta}^\prime\right|\dots\right)$
+    2. Let 
+    $\alpha^\ast = \mathrm{min}\{1,\frac{f\left(\left.\boldsymbol{\theta}^\prime\right|\dots\right)}
+    {f\left(\left.\boldsymbol{\theta}\right|\dots\right)}
+    \frac{q\left(\left.\boldsymbol{\theta}\right|\dots\right)}
+    {q\left(\left.\boldsymbol{\theta}^\prime\right|\dots\right)}\}$. N.B.: Constants cancel so not needed!
+    3. If $\alpha^\ast$ is greater than a standard uniform variate, set
+    $\boldsymbol{\theta} = \boldsymbol{\theta}^\prime$
+    4. Store $\boldsymbol{\theta}$ as the $s$-th draw
+
+* The $S$ draws of $\boldsymbol{\theta}$ have PDF
+$f\left(\left.\boldsymbol{\theta}\right|\dots\right)$ but are NOT independent
+
+* If $\frac{q\left(\left.\boldsymbol{\theta}\right|\dots\right)}
+           {q\left(\left.\boldsymbol{\theta}^\prime\right|\dots\right)} = 1$, called Metropolis MCMC
+
+## Metropolis Sampling from a Bivariate Normal {.smaller}
+
+```{r, echo = FALSE, comment = ""}
+cat(readLines("Metropolis_rng.stan"), sep = "\n")
+```
+```{r}
+rstan::expose_stan_functions("Metropolis_rng.stan")
+```
+
+## Efficiency in Estimating $\mathbb{E}X$ & $\mathbb{E}Y$ w/ Metropolis
+
+```{r}
+means <- replicate(26, colMeans(Metropolis_rng(S, 2.75, mu_X, mu_Y, sigma_X, sigma_Y, rho)))
+rownames(means) <- c("x", "y"); colnames(means) <- LETTERS; round(means, digits = 3)
+round(indep, digits = 3) # note S was 100, rather than 1000
+```
+
+## Autocorrelation of Metropolis MCMC
+
+```{r, eval = TRUE, fig.height=4.25, fig.width=9, small.mar = TRUE}
+xy <- Metropolis_rng(S, 2.75, mu_X, mu_Y, sigma_X, sigma_Y, rho); nrow(unique(xy))
+colnames(xy) <- c("x", "y"); plot(as.ts(xy), main = "")
+```
+
+## Effective Sample Size of Markov Chain Output
+
+* If a Markov Chain mixes fast enough for the MCMC CLT to hold, then
+
+    * The Effective Sample Size is $n_{eff} = \frac{S}{1 + 2\sum_{k=1}^\infty \rho_k}$, where $\rho_k$ is the
+      ex ante autocorrelation between two draws that are $k$ iterations apart
+    * The MCMC Standard Error of the mean of the $S$ draws is $\frac{\sigma}{\sqrt{n_{eff}}}$ where $\sigma$ 
+      is the true posterio standard deviation
+
+* If $\rho_k = 0 \forall k$, then $n_{eff} = S$ and the MCMC-SE is $\frac{\sigma}{\sqrt{S}}$, so the
+Effective Sample Size is the number of INDEPENDENT draws that would be expected to estimate the posterior mean 
+of some function with the same accuracy as the $S$ DEPENDENT draws that you have from the posterior distribution
+
+* Both have to be estimated and unfortunately, the estimator is not that reliable when the true 
+  Effective Sample Size is low (~5% of $S$)
+* For this Metropolis sampler, $n_{eff}$ is estimated to be $\approx 100$ for both margins
+
+
+## Gibbs Samplers
+
+* Metropolis-Hastings where $q\left(\left.\theta_k^\prime\right|\dots\right) =
+  f\left(\left.\theta_k^\prime\right|\boldsymbol{\theta}_{-k}\dots\right)$
+  and $\boldsymbol{\theta}_{-k}$ consists of all elements of
+  $\boldsymbol{\theta}$ except the $k$-th
+* $\alpha^\ast =
+  \mathrm{min}\{1,\frac{f\left(\left.\boldsymbol{\theta}^\prime\right|\dots\right)}
+    {f\left(\left.\boldsymbol{\theta}\right|\dots\right)}
+    \frac{f\left(\left.\theta_k\right|\boldsymbol{\theta}_{-k}\dots\right)}
+    {f\left(\left.\theta_k^\prime\right|\boldsymbol{\theta}_{-k}\dots\right)}\} =
+  \mathrm{min}\{1,\frac{f\left(\left.\theta_k^\prime\right|\boldsymbol{\theta}_{-k}\dots\right)
+    f\left(\left.\boldsymbol{\theta}_{-k}\right|\dots\right)}
+    {f\left(\left.\theta_k\right|\boldsymbol{\theta}_{-k}\dots\right)
+     f\left(\left.\boldsymbol{\theta}_{-k}\right|\dots\right)}
+    \frac{f\left(\left.\theta_k\right|\boldsymbol{\theta}_{-k}\dots\right)}
+    {f\left(\left.\theta_k^\prime\right|\boldsymbol{\theta}_{-k}\dots\right)}\} = 1$
+  so $\theta_k^\prime$ is ALWAYS accepted by construction. But $\theta_k^\prime$ may be very 
+  close to $\theta_k$ when the variance of the "full-conditional" distribution of 
+  $\theta_k^\prime$ given $\boldsymbol{\theta}_{-k}$ is small
+* Can loop over $k$ to draw sequentially from each full-conditional distribution  
+* Presumes that there is an algorithm to draw from the full-conditional distribution
+  for each $k$. Most times have to fall back to something else.
+
+## Gibbs Sampling from the Bivariate Normal 
+
+```{r, echo = FALSE, comment = ""}
+cat(readLines("Gibbs_rng.stan"), sep = "\n")
+```
+```{r}
+rstan::expose_stan_functions("Gibbs_rng.stan")
+```
+
+## Autocorrelation of Gibbs Sampling: $n_{eff} \approx 300$
+
+```{r, fig.width=9, fig.height=4.5, small.mar = TRUE}
+xy <- Gibbs_rng(S, mu_X, mu_Y, sigma_X, sigma_Y, rho)
+colnames(xy) <- c("x", "y")
+plot(as.ts(xy), main = "")
+```
+
+## What the BUGS Software Family Essentially Does
+
+```{r}
+library(Runuran) # defines ur() which draws from the approximate ICDF via pinv.new()
+BUGSish <- function(log_kernel, # function of theta outputting posterior log-kernel
+                    theta,      # starting values for all the parameters
+                    ...,        # additional arguments passed to log_kernel
+                    LB = rep(-Inf, K), UB = rep(Inf, K), # optional bounds on theta
+                    S = 1000) { # number of posterior draws to obtain
+  K <- length(theta); draws <- matrix(NA, nrow = S, ncol = K)
+  for(s in 1:S) { # these loops are slow, as is approximating the ICDF | theta[-k]
+    for (k in 1:K) {
+      full_conditional <- function(theta_k) 
+        return(log_kernel(c(head(theta, k - 1), theta_k, tail(theta, K - k)), ...))
+      theta[k] <- ur(pinv.new(full_conditional, lb = LB[k], ub = UB[k], islog = TRUE,
+                              uresolution = 1e-8, smooth = TRUE, center = theta[k]))
+    }
+    draws[s, ] <- theta
+  }
+  return(draws)
+}
+```
+
+## Gibbs Sampling a la BUGS: $n_{eff} \approx 200$
+
+```{r, BUGS, cache = TRUE, small.mar = TRUE}
+xy <- BUGSish(binormal_lpdf, theta = c(0,0),
+              mu_X, mu_Y, sigma_X, sigma_Y, rho)
+colnames(xy) <- c("x", "y")
+plot(as.ts(xy), main = "")
+```
+

@@ -1,0 +1,78 @@
+---
+title: "Bayesian Inference - HW2"
+author: "Ilan Reinstein"
+date: "4/28/2019"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(brms)
+library(rstan)
+options(mc.cores = parallel::detectCores())
+
+GSS <- readRDS("GSS.rds")
+head(GSS)
+levels(GSS$marhomo)
+GSS$year <- as.integer(GSS$year)
+vals <- sapply(GSS, FUN = attr, which = "levels")
+str(GSS$marhomo)
+gss_cat
+```
+
+## Question 1
+
+```{r}
+# Prior Predictive Distribution with no predictors
+prior0 <- c(prior(normal(-2.5, 2), class = "Intercept", coef = "strongly agree"),
+            prior(normal(-2, 2), class = "Intercept", coef = "agree"),
+            prior(normal(-1, 2), class = "Intercept", coef = "neither agree nor disagree"),
+            prior(normal(0.5, 2), class = "Intercept", coef = "disagree"),
+            prior(normal(-1,5), class = "Intercept"))
+
+prior_pd.0 <- brm(marhomo ~ 1, family = cumulative, data = GSS, sample_prior = "only", prior = prior0)
+
+prior_summary(prior_pd.0)
+summary(prior_pd.0)
+
+prior_pd.0$model
+
+linpred0 <- posterior_linpred(prior_pd.0, transform = TRUE)
+round(linpred0[4000,,],2)
+
+
+diff(plogis(c(-Inf, -2.5,-2,-1,0.5, Inf)))
+```
+## Question 2
+
+
+```{r}
+
+GSS$year <- as.integer(factor(GSS$year, labels = c(0:8))) 
+
+prior1 <- c(prior(normal(-2.5, 2), class = "Intercept", coef = "strongly agree"),
+            prior(normal(-2, 2), class = "Intercept", coef = "agree"),
+            prior(normal(-1, 2), class = "Intercept", coef = "neither agree nor disagree"),
+            prior(normal(0.5, 2), class = "Intercept", coef = "disagree"),
+            prior(dirichlet(1, 2, 2, 3, 4, 4, 4, 5), class = "simo", coef = "moyear1"),
+            prior(normal(1,10), class = "b", coef = "moyear"))
+
+get_prior(marhomo ~ mo(year), family = cumulative, data = GSS)
+prior_pd.1 <- brm(marhomo ~ mo(year), family = cumulative, data = GSS, sample_prior = "only", prior = prior1)
+
+
+linpred1 <- posterior_linpred(prior_pd.1, transform = TRUE)
+round(linpred1[2576,,],2)
+
+```
+
+
+```{r}
+prior1 <- c(prior(normal(-2.5, 2), class = "Intercept", coef = "strongly agree"),
+            prior(normal(-2, 2), class = "Intercept", coef = "agree"),
+            prior(normal(-1, 2), class = "Intercept", coef = "neither agree nor disagree"),
+            prior(normal(0.5, 2), class = "Intercept", coef = "disagree"),
+            prior(normal(0.5, 1),class = "b", coef = "year"))
+
+```
+

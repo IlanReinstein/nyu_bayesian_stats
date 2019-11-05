@@ -1,0 +1,57 @@
+---
+title: "Your Name"
+---
+
+# Poisson Processes with Outliers
+
+## Sampling Distribution of the Sample Mean
+
+Answer goes here
+
+## Power of the Test
+
+Answer goes here
+
+## Posterior Distribution
+
+Answer goes here
+
+## Summary
+
+Answer goes here
+
+# Current Population Survey
+
+## Frequentist Perspective
+
+Answer goes here
+
+## Getting CPS Data
+
+This is a chunk of R code that gets executed when you knit the RMarkdown file into a HTML or PDF file.
+You can insert more of them using the drop-down menu above and to the right.
+```{r}
+library(haven)
+CPS <- as_factor(read_dta(dir(pattern = "^cepr_.*dta$"))) 
+# as_factor changes the categorical variables in Stata to R factors
+```
+
+## Selection
+
+This R chunk evaluates but suppresses the R code in it and gets rid of the formatting so you just see
+plain Stan code in the knitted HTML or PDF file
+```{r, echo = FALSE, comment = ""}
+writeLines(readLines(dir(pattern = "stan$"))) # works if you save your Stan file in the same directory
+```
+
+## Prior Predictive Checking
+
+Answer goes here
+
+## Estimating a Probit Model
+
+Answer goes here
+
+## Inference
+
+Answer goes here

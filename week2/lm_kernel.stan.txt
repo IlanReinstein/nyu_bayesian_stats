@@ -1,0 +1,19 @@
+functions { /* saved as lm_kernel.stan*/
+  real lm_kernel(real alpha, real beta, real tau,
+                 vector y, vector x) {
+    int N = rows(x);
+    vector[N] x_ = x - mean(x);
+    vector[N] mu = alpha + beta * x_;
+  
+  
+  
+  
+    real sigma = inv_sqrt(tau);
+    //       ^^^ inv_sqrt(tau) = 1 / sqrt(tau)
+    // alpha and beta have improper priors ...
+    // ... so they add nothing to the log-kernel
+    return -log(tau) // Jeffreys prior on tau
+           + normal_lpdf(y | mu, sigma);
+           // ^^^ log-likelihood of parameters
+  }
+}

@@ -1,0 +1,19 @@
+functions { /* saved as OLS_rng.stan*/
+  matrix OLS_rng(int S, real alpha, real beta, 
+                 real sigma, vector x) {
+    matrix[S, 3] out; int N = rows(x); 
+    vector[N] x_ = x - mean(x);
+    vector[N] mu = alpha + beta * x_; 
+    real SSX = sum(square(x_)); 
+    for (s in 1:S) {
+      vector[N] y; vector[N] e;
+      for (n in 1:N) 
+        y[n] = mu[n] + normal_rng(0, sigma);
+      out[s, 1] = mean(y); 
+      out[s, 2] = sum(y .* x_) / SSX;
+      e = y - (out[s, 1] + out[s, 2] * x_);
+      out[s, 3] = sum(square(e)) / (N - 2);
+    }
+    return out;
+  }
+}

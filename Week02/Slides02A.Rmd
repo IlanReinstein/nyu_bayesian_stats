@@ -1,0 +1,296 @@
+---
+title: More Probability with Discrete Random Variables
+author: Ben Goodrich
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+autosize: true
+header-includes:
+   - \usepackage{amsmath}
+   - \usepackage{color}
+output:
+  ioslides_presentation:
+    widescreen: true
+---
+<style type="text/css">
+slides > slide:not(.nobackground):after {
+  content: '';
+}
+</style>
+
+```{r, setup, include = FALSE}
+options(width = 90)
+library(knitr)
+knit_hooks$set(small.mar = function(before, options, envir) {
+    if (before) par(mar = c(4, 4, .1, .1))  # smaller margin on top and right
+})
+```
+
+```{r, include = FALSE}
+source("https://tinyurl.com/y93srfmp")
+```
+
+## Obligatory Disclosure
+
+* Ben is an employee of Columbia University, which has received several research grants to develop Stan
+* Ben is also a manager of GG Statistics LLC, which uses Stan for business purposes
+* According to Columbia University 
+  [policy](https://research.columbia.edu/content/conflict-interest-and-research), any such employee who 
+  has any equity stake in, a title (such as officer or director) with, or is expected to earn at least 
+  $\$5,000.00$ per year from a private company is required to disclose these facts in presentations
+  
+## `source("https://tinyurl.com/y93srfmp")` {.smaller}
+
+```{r, size='footnotesize', echo = FALSE, message = FALSE}
+library(kableExtra)
+library(dplyr)
+options("kableExtra.html.bsTable" = TRUE)
+options(scipen = 5)
+tmp <- as.data.frame(joint_Pr)
+for (i in 1:ncol(tmp)) 
+  tmp[,i] <- cell_spec(round(tmp[,i], digits = 6), "html", bold = tmp[,i] == 0,
+                       color = ifelse(tmp[,i] == 0, "red", "black"))
+kable(tmp, digits = 5, align = 'c', escape = FALSE) %>%
+    kable_styling("striped", full_width = FALSE)
+```
+
+## Expectation of a Discrete Random Variable {.build}
+
+```{r}
+round(Pr(Omega), digits = 3)  # What is the mode, median, and expectation of X1?
+```
+
+> - The MODE is the element of $\Omega$ with the highest probability ($10$ here)
+> - The MEDIAN is the smallest element of $\Omega$ such that AT LEAST 
+half of the cumulative probability is less than or equal to that element ($9$ here)
+> - EXPECTATION of a discrete random variable $X$ is defined as
+$$\mathbb{E}X = \sum_{x\in\Omega}\left[x\times\Pr\left(x\right)\right] \equiv \mu$$
+> - Expectation is just a probability-weighted sum ($8.431$ here)
+
+## The Average Is an Estimator of an Expectation
+
+- Since $\mu = \sum_{y\in\Omega}y\Pr\left(y\right)$, if we ESTIMATE 
+$\Pr\left(y\right)$ with $\frac{1}{N}\sum_{n=1}^N\mathbb{I}\{y_n = y\}$,
+$$\widehat{\mu} =  
+  \frac{1}{N}\sum_{y\in\Omega}y\sum_{n=1}^N\mathbb{I}\{y_n = y\} = 
+  \frac{1}{N}\sum_{y\in\Omega}\sum_{n=1}^Ny\mathbb{I}\{y_n = y\} = 
+  \frac{1}{N}\sum_{n=1}^Ny_n$$
+- If we draw $\widetilde{y}$ from its probability distribution $S$ times, as $S\uparrow\infty$,
+$$\frac{1}{S}\sum_{s=1}^S\widetilde{y}_s \rightarrow \mu_Y$$
+```{r, sims, cache = TRUE}
+c(exact = sum(Omega * Pr(Omega)), 
+  approx = mean(sample(Omega, size = 10 ^ 8, replace = TRUE, prob = Pr(Omega))))
+```
+
+## Practice Problems
+
+> - How would we calculate the expectation of the second roll given that $x_1 = 7$
+  pins were knocked down on the first roll? 
+> - Answer: `sum(Omega * Pr(Omega, n = 10 - 7))`, which is `r sum(Omega * Pr(Omega, n = 10 - 7))`
+  because the non-zero conditional probabilities are $\frac{1}{7},\frac{1}{7},\frac{2}{7},\frac{3}{7}$
+> - How would we calculate the expectation of the second roll in a frame of bowling?
+
+## Marginal Expectation of Second Roll in Bowling
+
+- To obtain $\mathbb{E}X_{2}$, we do
+$$\begin{eqnarray*}
+\mathbb{E}X_{2} & = & \sum_{x_{j}\in\Omega_{X_{2}}}x_{j}\Pr\left(\left.X_{2}=x_{j}\right|n=10\right) \\
+                & = & \sum_{x_{j}\in\Omega_{X_{2}}}x_{j} \sum_{x_{i}\in\Omega_{X_{1}}}
+                      \Pr\left(x_{i} \bigcap x_{j}\right) \\
+                & = & \sum_{x_{j}\in\Omega_{X_{2}}}x_{j} \sum_{x_{i}\in\Omega_{X_{1}}}
+\Pr\left(\left.x_{j}\right|X_{1}=x_{i},n=10\right)\Pr\left(\left.x_{i}\right|n=10\right)
+\end{eqnarray*}$$
+
+```{r}
+Pr_X2 <- colSums(joint_Pr) # marginal probabilies from last week
+EX2 <- sum(Omega * Pr_X2)  # definition of marginal expectation
+EX2
+```
+
+## The Expectation Is a Linear Operator
+
+- What is the expectation of $cX$ where $c$ is any constant?
+
+> - Answer: $c\mu$ because
+$\mathbb{E}\left[cX\right] = \sum_{x\in\Omega}cx\Pr\left(x\right) = 
+c\sum_{x\in\Omega}x\Pr\left(x\right) = c\mathbb{E}X = c\mu$
+> - What is the expectation of the sum of two rolls in a frame of bowling?
+> - Answer: In general, $\mathbb{E}\left[aX + bY + c\right] = a\mu_X + b\mu_Y + c$, but in this case
+$$
+\mathbb{E}\left[X + Y\right] = \sum_{x\in\Omega_X}\sum_{y\in\Omega_Y}\left(x + 
+y\right)\Pr\left(x\bigcap y\right) =  \sum_{x\in\Omega_X}x\overset{\Pr\left(x\right)}{\overbrace{\sum_{y\in\Omega_Y}\Pr\left(x\bigcap y\right)}} +\\
+\sum_{y\in\Omega_Y}y\overset{\Pr\left(y\right)}{\overbrace{\sum_{x\in\Omega_X}\Pr\left(x\bigcap y\right)}} = 
+\overbrace{\sum_{x\in\Omega_X}x\Pr\left(x\right)}^{\mathbb{E}\left[X\right]} + \overbrace{\sum_{y\in\Omega_Y}y\Pr\left(y\right)}^{\mathbb{E}\left[Y\right]} = \mu_X + \mu_Y
+$$
+
+## Sum of Two Rolls in a Frame {.smaller}
+
+```{r}
+S <- row(joint_Pr) - 1 + col(joint_Pr) - 1; sum(joint_Pr * S)
+```
+
+```{r, echo = FALSE}
+tmp <- as.data.frame(S)
+rownames(tmp) <- colnames(tmp) <- Omega
+for (i in 1:ncol(tmp)) 
+  tmp[,i] <- cell_spec(round(tmp[,i], digits = 6), "html", bold = tmp[,i] > 10,
+                       color = ifelse(tmp[,i] > 10, "red", "black"))
+kable(tmp, digits = 5, align = 'c', escape = FALSE) %>%
+    kable_styling("striped", full_width = FALSE)
+```
+
+## Expectations of Functions of Discrete RVs {.build}
+
+> - Let $g\left(X\right)$ be a function of a discrete random variable whose expectation is
+$$\mathbb{E}g\left(X\right) = \sum_{x\in\Omega}\left[g\left(x\right)\times\Pr\left(x\right)\right]
+\neq g\left(\mathbb{E}X\right)$$
+> - If $g\left(X\right)=\left(X-\mu\right)^{2}$, the VARIANCE of $X$ is defined as $\mathbb{E}\left[\left(X-\mu\right)^{2}\right]=\sigma^{2}$. Show that
+$\sigma^2 = \mathbb{E}\left[X^2\right] - \mu^{2}$ by expanding $\left(X-\mu\right)^{2} = 
+X^2 - 2X\mu + \mu^2$.
+> - $\sigma=\sqrt[+]{\sigma^{2}}$ is the standard deviation but not an expectation of $X$
+> - If $g\left(X\right)=-\log\left(\Pr\left(X\right)\right)$, the ENTROPY of $X$ is $\mathbb{E}\left[-\log\left(\Pr\left(X\right)\right)\right],$ which reaches its upper bound of
+`log(length(Omega))` when $\Pr\left(x\right)$ is constant
+```{r}
+sum(-log(joint_Pr) * joint_Pr, na.rm = TRUE) # entropy
+```
+
+## Expected Utility
+
+- It is often sensible to make a decision that maximizes EXPECTED utility:
+
+    1. Enumerate $D$ possible decisions $\{d_1, d_2, \dots, d_D\}$ that are under consideration
+    2. Define a utility function $g\left(d,\dots\right)$ that also depends on unknown (and 
+      maybe additional known) quantities
+    3. Obtain / update your conditional probability distribution for all the unknowns given all
+      the knowns
+    4. Evaluate $\mathbb{E}g\left(d,\dots\right)$ for each of the $D$ decisions
+    5. Choose the decision that has the highest value in (4)
+
+- This is a very intuitive & useful procedure but you have to use Bayes Rule in (3)
+- Also, whoever is deciding has to specify (1) and (2)
+
+## Iterated Expectations
+
+- The expectation of a conditional expectation is a marginal expectation, i.e.
+
+$$\begin{eqnarray*}
+\mathbb{E}_X\left[\mathbb{E}\left[\left.Y\right|X = x\right]\right] & = & 
+\mathbb{E}_X\left[\sum_{y \in \Omega_Y} y\Pr\left(\left.y\right|X = x\right)\right] \\
+& = & \sum_{x \in \Omega_X} \Pr\left(X = x\right) \sum_{y \in \Omega_Y} y\Pr\left(\left.y\right|X = x\right) \\
+& = & \sum_{x \in \Omega_Y} \sum_{y \in \Omega_X} y\Pr\left(\left.y\right|X = x\right)\Pr\left(X = x\right) \\
+& = & \sum_{x \in \Omega_Y} \sum_{y \in \Omega_X} y \Pr\left(x \bigcap y\right) = 
+\sum_{y \in \Omega_Y} y \sum_{x \in \Omega_X} \Pr\left(x \bigcap y\right) \\
+& = & \sum_{y \in \Omega_Y} y \Pr\left(y\right) = \mathbb{E}Y = \mu_Y
+\end{eqnarray*}$$
+
+
+## Covariance and Correlation
+
+- If $g\left(X,Y\right)=\left(X-\mu_X\right)\left(Y-\mu_Y\right)$, their COVARIANCE is 
+defined as
+$$\mathbb{E}g\left(X,Y\right) = 
+\sum_{x\in\Omega_X}\sum_{y\in\Omega_Y}\left(x - \mu_X\right)\left(y - \mu_Y\right)\Pr\left(x \bigcap y\right)$$ 
+- If $g\left(X,Y\right)=\frac{X-\mu_X}{\sigma_X}\times\frac{Y-\mu_Y}{\sigma_Y}$, their
+CORRELATION is defined as
+$$\mathbb{E}g\left(X,Y\right) =
+\sum_{x\in\Omega_X}\sum_{y\in\Omega_Y}\frac{x - \mu_X}{\sigma_X}
+\frac{y - \mu_Y}{\sigma_Y}\Pr\left(x \bigcap y\right) =\\
+\frac{1}{\sigma_X \sigma_Y}
+\sum_{x\in\Omega_X}\sum_{y\in\Omega_Y}\left(x - \mu_X\right)\left(y - \mu_Y\right)
+\Pr\left(x \bigcap y\right) =
+\frac{\mathrm{Cov}\left(X,Y\right)}{\sigma_X \sigma_Y} = \rho$$
+- Covariance and correlation measure LINEAR dependence
+- Is $\rho\gtreqqless0$ for 2 rolls in the same frame of bowling?
+
+## Correlation Calculation in R
+
+```{r, correlation}
+Pr_X1 <- Pr(Omega)
+EX1 <- sum(Omega * Pr_X1)
+covariance <- 0
+for (x1 in Omega) {
+  for (x2 in 0:(10 - x1))
+    covariance <- covariance + (x1 - EX1) * (x2 - EX2) * joint_Pr[x1 + 1, x2 + 1]
+}
+Var_X1 <- sum( (Omega - EX1) ^ 2 * Pr_X1 )
+Var_X2 <- sum( (Omega - EX2) ^ 2 * Pr_X2 )
+correlation <- covariance / sqrt(Var_X1 * Var_X2)
+correlation
+```
+
+## Variance of a Sum
+
+- What is the variance of the sum of two rolls in the same frame of bowling?
+```{r}
+EX12 <- sum(joint_Pr * S)
+Var_X12 <- sum( joint_Pr * (S - EX12) ^ 2 )
+Var_X12
+```
+- `Var_X12` is also equal to
+```{r}
+Var_X1 + Var_X2 + 2 * covariance
+```
+from the previous slide. How would you go about showing that is true in general?
+
+## Bernoulli Distribution
+
+- $\Pr\left(\left.X=1\right|n=1\right)=\frac{\mathcal{F}_{1}}{-1 + \mathcal{F}_{1+2}}=\frac{1}{-1+1-2}=\frac{1}{2}$
+is one way to assign the probability of knocking down a single pin but is
+not the most general way
+- The Bernoulli distribution over $\Omega=\left\{ 0,1\right\}$ is 
+$\Pr\left(\left.X=1\right|\pi\right)=\pi\in\left[0,1\right]$ and thus 
+$\Pr\left(\left.X=0\right|\pi\right)=1-\pi$. Alternatively, 
+$\Pr\left(\left.x\right|\pi\right)=\pi^{x}\left(1-\pi\right)^{1-x}$.
+
+> - What expression is the expectation of a Bernoulli random variable?
+> - What expression is the variance of a Bernoulli random variable?
+> - Why isn't the Bernoulli distribution appropriate for the pins in bowling?
+> - If $X_i = \mathbb{I}\{\mbox{pin i is knocked down}\}$ and $\pi_i$ is the
+  probability in the $i$-th Bernoulli distribution, what is
+$$\Pr\left(\left.x_1\right|\pi_1\right)\prod_{i=2}^{10}
+  \Pr\left(\left.x_i\right|\pi_i,X_1=x_1,X_2=x_2,\dots,X_{i-1}=x_{i-1}\right)?$$
+
+## Binomial Distribution
+
+> - Binomial distribution is defined as the distribution of the sum of $n$
+  INDEPENDENT Bernoulli random variables, each with the same $\pi$
+> - What is $\Omega$ for a Binomial random variable?
+> - What is an expression for the expectation of a Binomial random variable?
+> - What is an expression for the variance of a Binomial random variable?
+> - What is an expression for $\Pr\left(\left.x\right|n=3,\pi\right)$? Hint: 8 cases to consider
+    * All succeed, $\pi^3$ or all fail, $\left(1 - \pi\right)^3$
+    * 1 succeeds and 2 fail $\pi^1 \left(1-\pi\right)^{3 - 1}$ 
+      but there are 3 ways that could happen
+    * 2 succeed and 1 fails $\pi^2 \left(1-\pi\right)^{3 - 2}$
+      but there are 3 ways that could happen
+    * In general, $\Pr\left(\left.x\right|n,\pi\right)={n \choose x}\pi^{x} \left(1-\pi\right)^{n-x}$, 
+      where ${n \choose x}=\frac{n!}{x!\left(n-x\right)!}$ is the number of ways $x$ can occur in $n$ 
+      tries (if order is unimportant)
+
+## Objectivity and Subjectivity
+
+- Under weak and not particularly controversial assumptions, Bayesian inference is THE objective way
+  to update your beliefs about (functions of) $\theta$ in light of new data $y_1, y_2, \dots, y_N$
+- Nevertheless, the Bayesian approach is labeled subjective because it does not say what your beliefs about 
+  $\theta$ should be before you receive $y_1, y_2, \dots, y_N$
+- Thus, if you currently believe something absurd about $\theta$ now, your beliefs about $\theta$ will
+  merely be less absurd after updating them with $y_1, y_2, \dots, y_N$
+- The big problem is not that people believe wrong things now, but that they do not update their 
+  beliefs about $\theta$ according to Bayesian principles when they observe $y_1, y_2, \dots, y_N$
+- In fact, in some situations, observing data that contradicts people's previous beliefs makes them
+  believe in their wrong beliefs more strongly
+- Bayesian principles are also used in formal models, but as an assumption about how people
+  should behave rather than a behavioral description
+
+## (Dis)Advantages of Bayesian Inference
+
+- Bayesian inference remains useful in situations other paradigms specialize in:
+    - Experiments: What are your beliefs about the ATE after seeing the data?
+    - Repeated designs: Bayesian estimates have correct frequentist properties
+    - Predictive modeling: If you only care about predictions, use the 
+      posterior predictive distribution
+- Bayesian inference is very useful when you are using the results to make a decision
+  or take an action; other paradigms are not
+- Bayesian inference is orders of magnitude more difficult for your computer because
+  it is attempting to answer a more ambitious question
+- The Bayesian approach is better suited for convincing yourself of something than
+  convincing other people
+  

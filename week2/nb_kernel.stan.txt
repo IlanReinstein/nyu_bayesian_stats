@@ -1,0 +1,19 @@
+functions { /* saved as nb_kernel.stan */
+  real nb_PPD_rng(real alpha, real beta, 
+                  real inv_phi, real a_loc,
+                  real a_scale, real b_loc,
+                  real b_scale, real rate,
+                  vector x, int[] y) {
+    int N = rows(x); vector[N] x_ = x - mean(x);
+    real p = normal_lpdf(alpha | a_loc, a_scale);
+    real q = normal_lpdf(beta | b_loc, b_scale);
+    real r = exponential_lpdf(inv_phi | rate);
+    
+    vector[N] eta = alpha + beta * x_;
+        
+    
+    return p + q + r + // priors & loglikelihood
+      neg_binomial_2_log_lpmf(y | eta, 
+                                  inv(inv_phi));
+  }
+}

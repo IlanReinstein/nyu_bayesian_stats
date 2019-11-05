@@ -1,0 +1,33 @@
+functions {
+  // modified from Week 1 to only return a row vector of size 2
+  row_vector binormal_rng(real mu_X, real mu_Y, real sigma_X, real sigma_Y, real rho) {
+    real beta = rho * sigma_Y / sigma_X;
+    real sigma = sigma_Y * sqrt(1 - square(rho));
+    real x = normal_rng(mu_X, sigma_X);
+    real y = normal_rng(mu_Y + beta * (x - mu_X), sigma);
+    return [x, y];
+  }
+  
+  /*
+    @param S positive integer representing the number of simulations
+    @param N positive integer representing the number of people
+    @param loc vector of prior expectations for parameters
+    @param scal vector of prior standard deviations for parameters
+    @return matrix of prior predictions for an individual
+      with -1 indicating not in the labor force, 0 indicating unemployed
+      and 1 indicating employed
+  */
+  matrix selection_rng(int S, int N, vector loc, vector scal) {
+    matrix[S, N] draws;
+    for (s in 1:S) {
+      real alpha_1 = normal_rng(loc[1], scal[1]);
+      real alpha_2 = normal_rng(loc[2], scal[2]);
+      for (n in 1:N) {
+        row_vector[2] epsilon = binormal_rng(0, 0, 1, 1, 0);
+        if ((alpha_1 + epsilon[1]) < 0) draws[s, n] = -1;
+        else draws[s, n] = (alpha_2 + epsilon[2]) > 0;
+      }
+    }
+    return draws;
+  }
+}

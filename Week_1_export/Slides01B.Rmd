@@ -1,0 +1,307 @@
+---
+title: Probability with Discrete Variables
+author: Ben Goodrich
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+autosize: true
+header-includes:
+   - \usepackage{amsmath}
+   - \usepackage{color}
+output:
+  ioslides_presentation:
+    widescreen: true
+editor_options: 
+  chunk_output_type: console
+---
+<style type="text/css">
+slides > slide:not(.nobackground):after {
+  content: '';
+}
+</style>
+
+```{r, setup, include = FALSE}
+options(width = 90)
+library(knitr)
+knit_hooks$set(small.mar = function(before, options, envir) {
+    if (before) par(mar = c(4, 4, .1, .1))  # smaller margin on top and right
+})
+```
+
+## Obligatory Disclosure
+
+* Ben is an employee of Columbia University, which has received several research grants to develop Stan
+* Ben is also a manager of GG Statistics LLC, which uses Stan for business purposes
+* According to Columbia University 
+  [policy](https://research.columbia.edu/content/conflict-interest-and-research), any such employee who 
+  has any equity stake in, a title (such as officer or director) with, or is expected to earn at least 
+  $\$5,000.00$ per year from a private company is required to disclose these facts in presentations
+
+## Sets
+
+- A set is a collection of elements
+- Elements can be intervals and / or isolated elements
+- One often-used set is the set of real numbers, $\mathbb{R}$
+- Loosely, real numbers have decimal points
+- Integers are a subset of $\mathbb{R}$, denoted $\mathbb{Z}$, where
+the decimal places are $.000\dots$
+- Often negative numbers are excluded from a set; e.g. $\mathbb{R}_{+}$
+- Sets can be categorical
+- In this session we are going to focus on some subset of $\mathbb{Z}$
+
+## Random Variables
+
+- A function is a rule that UNIQUELY maps each element of an input set to some element of an output set
+- A random variable is a FUNCTION from the sample space, $\Omega$, to some subset of $\mathbb{R}$ with a probability-based rule
+```{r, echo = FALSE, small.mar = TRUE}
+curve(qexp, from = 0, to = 1, xlab = "x", ylab = "g(x)", las = 1)
+```
+
+## Sample Space
+
+> The sample space, denoted $\Omega$, is the set of all possible outcomes of an observable random variable
+
+> - Suppose you roll a six-sided die. What is $\Omega$?
+> - Do not conflate a REALIZATION of a random variable with the FUNCTION that generated it
+> - By convention, a capital letter, $X$, indicates a random variable
+and its lower-case counterpart, $x$, indicates a realization of $X$
+
+## First Roll in Bowling
+
+- Each frame in bowling starts with $n=10$ pins
+- You get 2 rolls per frame to knock down pins
+
+> - What is $\Omega$ for your first roll?
+> - $|$ is read as "given"
+> - Hohn (2009) discusses a few distributions for the probability
+of knocking down $X\geq0$ out of $n\geq X$ pins, including $\Pr\left(\left.x\right|n\right)=\frac{\mathcal{F}_{x}}{-1 + \mathcal{F}_{n+2}}$
+where $\mathcal{F}_{x}$ is the $x$-th Fibonacci number, i.e. $\mathcal{F}_{0}=1$,
+$\mathcal{F}_{1}=1$, and otherwise $\mathcal{F}_{x}=\mathcal{F}_{x-1}+\mathcal{F}_{x-2}$
+> - First 13 Fibonacci numbers are 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, and 233
+> - Sum of the first 11 Fibonacci numbers is 232
+
+## `source("https://tinyurl.com/y9ubz73j")`
+
+```{r, FandPr}
+# computes the x-th Fibonacci number without recursion and with vectorization
+F <- function(x) {
+  stopifnot(is.numeric(x), all(x == as.integer(x)))
+  sqrt_5 <- sqrt(5) # defined once, used twice
+  golden_ratio <- (1 + sqrt_5) / 2
+  return(round(golden_ratio ^ (x + 1) / sqrt_5))
+}
+# probability of knocking down x out of n pins
+Pr <- function(x, n = 10) return(ifelse(x > n, 0, F(x) / (-1 + F(n + 2))))
+
+Omega <- 0:10 # 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+round(c(Pr(Omega), total = sum(Pr(Omega))), digits = 3)
+
+x <- sample(Omega, size = 1, prob = Pr(Omega)) # realization of random variable
+```
+
+## Second Roll in Bowling
+
+> - How would you compute the probability of knocking down the remaining pins on 
+  your second roll?
+> - Let $X_{1}$ and $X_{2}$ respectively be the number of pins knocked down on 
+  the first and second rolls of a frame of bowling. What function yields the
+  probability of knocking down $x_2$ pins on your second roll?
+
+> - $\Pr\left(\left.x_{2}\right|X_{1}=x_{1},n=10\right)=\frac{\mathcal{F}_{x_{2}}}{-1 + \mathcal{F}_{10-x_{1}+2}}\times\mathbb{I}\left\{ x_{2}\leq10-x_{1}\right\}$
+> - $\mathbb{I}\left\{ \cdot\right\}$ is an "indicator function" that equals $1$ if it is true and $0$ if it is false
+> - $\Pr\left(\left.x_{2}\right|X_{1}=x_{1},n=10\right)$ is a CONDITIONAL probability
+> - Conditioning is a fundamental idea that means, "do an operation only in the subset where the condition(s) hold(s)"
+
+## From Aristotelian Logic to Bivariate Probability
+
+- In R, `TRUE` maps to $1$ and `FALSE` maps to $0$ when doing arithmetic operations
+```{r, AND}
+(TRUE & TRUE) == (TRUE * TRUE)
+(TRUE & FALSE) == (TRUE * FALSE)
+```
+- Can generalize to probabilities on the $[0,1]$ interval to compute the probability
+  that two (or more) propositions are true simultaneously
+- $\bigcap$ reads as "and". __General Multiplication Rule__: $\Pr\left(A\bigcap B\right)=\Pr\left(B\right)\times\Pr\left(\left.A\right|B\right)=\Pr\left(A\right)\times\Pr\left(\left.B\right|A\right)$
+  
+## Independence
+
+- Loosely, $A$ and $B$ are independent propositions if $A$ being true or false tells
+  us nothing about the probability that $B$ is true (and vice versa)
+- Formally, $A$ and $B$ are independent iff $\Pr\left(\left.A\right|B\right)=\Pr\left(A\right)$
+  (and $\Pr\left(\left.B\right|A\right)=\Pr\left(B\right)$). Thus, 
+  $\Pr\left(A\bigcap B\right)=\Pr\left(A\right)\times\Pr\left(B\right)$.
+- Why is it reasonable to think
+    - Two rolls in the same frame are not independent?
+    - Two rolls in different frames are independent?
+    - Rolls by two different people are independent regardless of whether they are in the same frame?
+
+> - What is the probability of obtaining a turkey (3 consecutive strikes)?
+> - What is the probability of knocking down $9$ pins on the first roll and $1$ pin 
+  on the second roll?
+  
+## Joint Probability of Two Rolls in Bowling
+
+- How to obtain the joint probability, $\Pr\left(\left.x_{1}\bigcap x_{2}\right|n=10\right)$, in general?
+
+$$\begin{eqnarray*}
+\Pr\left(\left.x_{1}\bigcap x_{2}\right|n=10\right) & = & \Pr\left(\left.x_{1}\right|n=10\right)\times\Pr\left(\left.x_{2}\right|X_{1}=x_{1},n=10\right)\\
+ & = & \frac{\mathcal{F}_{x_{1}}}{-1+\mathcal{F}_{10+2}}\times\frac{\mathcal{F}_{x_{2}}}{-1 + \mathcal{F}_{10-x_{1}+2}}\times\mathbb{I}\left\{ x_{2}\leq10-x_{1}\right\}
+\end{eqnarray*}$$
+
+```{r, joint}
+joint_Pr <- matrix(0, nrow = length(Omega), ncol = length(Omega))
+rownames(joint_Pr) <- colnames(joint_Pr) <- as.character(Omega)
+for (x1 in Omega) {
+  Pr_x1 <- Pr(x1)
+  for (x2 in 0:(10 - x1))
+    joint_Pr[x1 + 1, x2 + 1] <- Pr_x1 * Pr(x2, 10 - x1)
+}
+sum(joint_Pr) # that sums to 1
+```
+
+## `joint_Pr`: Row is roll 1, Column is roll 2 {.smaller}
+
+```{r, size='footnotesize', echo = FALSE, message = FALSE}
+library(kableExtra)
+library(dplyr)
+options("kableExtra.html.bsTable" = TRUE)
+options(scipen = 5)
+tmp <- as.data.frame(joint_Pr)
+for (i in 1:ncol(tmp)) 
+  tmp[,i] <- cell_spec(round(tmp[,i], digits = 6), "html", bold = tmp[,i] == 0,
+                       color = ifelse(tmp[,i] == 0, "red", "black"))
+kable(tmp, digits = 5, align = 'c', escape = FALSE) %>%
+    kable_styling("striped", full_width = FALSE)
+```
+
+## Composition
+
+- The stochastic analogue to the __General Multiplication Rule__ is composition
+- Randomly draw a realization of $x_1$ and use that realization of $x_1$ when
+  randomly drawing $x_2$ from its conditional distribution
+```{r, composition, cache = TRUE}
+S <- 10^6; yes <- 0
+for (s in 1:S) {
+  x1 <- sample(Omega, size = 1, prob = Pr(Omega))
+  x2 <- sample(0:(10 - x1), size = 1, prob = Pr(0:(10 - x1), n = 10 - x1))
+  if (x1 == 9 & x2 == 1) yes <- yes + 1
+}
+c(simulated = yes / S, truth = joint_Pr["9", "1"])
+```
+- As $S\uparrow \infty$, this process converges to $\Pr\left(X_1 = 9 \bigcap X_2 = 1\right)$
+
+## Aristotelian Logic to Probability of Alternatives
+
+- What is the probability you fail to get a strike on this frame or the next one?
+
+> - Can generalize Aristotelian logic to probabilities on the $[0,1]$ interval to compute the probability
+  that one of two (or more) propositions is true
+> - $\bigcup$ is read as "or". __General Addition Rule__: $\Pr\left(A\bigcup B\right)=\Pr\left(A\right)+\Pr\left(B\right)-\Pr\left(A\bigcap B\right)$
+- If $\Pr\left(A\bigcap B\right) = 0$, $A$ and $B$ are mutually exclusive (disjoint)
+
+## What is the probability that $X_2 = 9$?  {.smaller}
+
+```{r, size='footnotesize', echo = FALSE}
+tmp <- as.data.frame(joint_Pr)
+for (i in 1:ncol(tmp)) 
+  tmp[,i] <- cell_spec(round(tmp[,i], digits = 6), "html", bold = tmp[,i] == 0,
+                       color = ifelse(tmp[,i] == 0, "red", "black"))
+kable(tmp, digits = 5, align = 'c', escape = FALSE) %>%
+    kable_styling("striped", full_width = FALSE)
+```
+
+
+## Marginal Distribution of Second Roll in Bowling
+
+
+- How to obtain $\Pr\left(\left.x_{2}\right|n=10\right)$ irrespective of $x_{1}$?
+- Since events in the first roll are mutually exclusive, use the easy
+form of the General Addition Rule to "marginalize":
+$$\begin{eqnarray*}
+\Pr\left(\left.x_{2}\right|n=10\right) & = & 
+\sum_{i:x_{i}\in\Omega_{X_{1}}}\Pr\left(\left.x_{i}\bigcap x_{2}\right|n=10\right)\\
+ & = & \sum_{i:x_{i}\in\Omega_{X_{1}}}\Pr\left(\left.x_{2}\right|X_{1}=x_{i},n=10\right) \times
+ \Pr\left(\left.x_{i}\right|n=10\right)
+\end{eqnarray*}$$
+```{r, marginal, size='footnotesize', comment=NA}
+round(rbind(Pr_X1 = Pr(Omega), margin1 = rowSums(joint_Pr), margin2 = colSums(joint_Pr)), 3)
+```
+
+## Marginal, Conditional, and Joint Probabilities
+
+> - To compose a joint (in this case bivariate) probability, MULTIPLY a marginal probability by
+  a conditional probability
+> - To decompose a joint (in this case bivariate) probability, ADD the relevant joint probabilities
+  to obtain a marginal probability
+> - To obtain a conditional probability, DIVIDE the relevant joint probability by the relevant
+  marginal probability since
+$$\Pr\left(A\bigcap B\right)=\Pr\left(B\right)\times\Pr\left(\left.A\right|B\right)=\Pr\left(A\right)\times\Pr\left(\left.B\right|A\right)$$
+$$\Pr\left(\left.A\right|B\right)= \frac{\Pr\left(A\right)\times\Pr\left(\left.B\right|A\right)}{\Pr\left(B\right)} \mbox{ if } \Pr\left(B\right) > 0$$
+> - This is Bayes Rule  
+> - What is $\Pr\left(\left.X_1 = 3\right|X_2 = 4, n = 10\right)$?
+
+## Conditioning on $X_2 = 4$ {.smaller}
+```{r, size='footnotesize', echo = FALSE}
+tmp <- as.data.frame(joint_Pr)
+for (i in 1:ncol(tmp)) 
+  tmp[,i] <- cell_spec(round(tmp[,i], digits = 6), "html", bold = tmp[,i] == 0,
+                       color = ifelse(tmp[,i] == 0, "red", 
+                                      ifelse(i == 5, "black", "blue")))
+kable(tmp, digits = 5, align = 'c', escape = FALSE) %>%
+    kable_styling("striped", full_width = FALSE)
+```
+
+## Example of Bayes Rule
+
+
+```{r}
+joint_Pr["3", "4"] / sum(joint_Pr[,"4"])
+```
+- Bayesians generalize this by taking $A$ to be "beliefs about whatever you do not know" and $B$ to be whatever you do know in 
+$$\Pr\left(\left.A\right|B\right)= \frac{\Pr\left(A\right)\times\Pr\left(\left.B\right|A\right)}{\Pr\left(B\right)} \mbox{ if } \Pr\left(B\right) > 0$$
+- Frequentists accept Bayes Rule but object to using the language of probability to describe 
+  beliefs about unknown propositions and insist that probability is a property of a process 
+  that can be defined as a limit
+$$\Pr\left(A\right) = \lim_{S\uparrow\infty} 
+\frac{\mbox{times that } A \mbox{ occurs in } S \mbox{ independent tries}}{S}$$
+
+## Probability in Football
+
+- What is the probability that the Patriots beat the Rams next Sunday?
+- To a frequentist, it is infeasible to answer this question objectively and it 
+  should not be answered subjectively
+- One way of understanding it from a Bayesian perspective is via betting: Do you want to risk \$6
+  to gain \$4 if the Patrios win? If so, you believe the probability the Patriots win is greater than $0.6$.
+  $$\mathrm{Odds}\left(A\right) = \frac{\Pr\left(A\right)}{1 - \Pr\left(A\right)}$$
+- Once you commit to a probability, the decision to bet is straightforward
+
+> - Everyone understands what you mean if you say the probability the Patriots beat the Rams is
+  greater than $0.6$. Why must science be different?  
+  
+## Objectivity and Subjectivity
+
+- Under weak and not particularly controversial assumptions, Bayesian inference is THE objective way
+  to update your beliefs about (functions of) $\theta$ in light of new data $y_1, y_2, \dots, y_N$
+- Nevertheless, the Bayesian approach is labeled subjective because it does not say what your beliefs about 
+  $\theta$ should be before you receive $y_1, y_2, \dots, y_N$
+- Thus, if you currently believe something absurd about $\theta$ now, your beliefs about $\theta$ will
+  merely be less absurd after updating them with $y_1, y_2, \dots, y_N$
+- The big problem is not that people believe wrong things now, but that they do not update their 
+  beliefs about $\theta$ according to Bayesian principles when they observe $y_1, y_2, \dots, y_N$
+- In fact, in some situations, observing data that contradicts people's previous beliefs makes them
+  believe in their wrong beliefs more strongly
+- Bayesian principles are also used in formal models, but as an assumption about how people
+  should behave rather than a behavioral description
+
+## (Dis)Advantages of Bayesian Inference
+
+- Bayesian inference remains useful in situations other paradigms specialize in:
+    - Experiments: What are your beliefs about the ATE after seeing the data?
+    - Repeated designs: Bayesian estimates have correct frequentist properties
+    - Predictive modeling: If you only care about predictions, use the 
+      posterior predictive distribution
+- Bayesian inference is very useful when you are using the results to make a decision
+  or take an action; other paradigms are not
+- Bayesian inference is orders of magnitude more difficult for your computer because
+  it is attempting to answer a more ambitious question
+- The Bayesian approach is better suited for convincing yourself of something than
+  convincing other people
+  

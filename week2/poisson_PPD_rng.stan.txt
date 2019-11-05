@@ -1,0 +1,19 @@
+functions { /* named poisson_PPD_rng.stan */
+  matrix poisson_PPD_rng(int S, vector x,
+                         real a_loc, 
+                         real a_scale,
+                         real b_loc, 
+                         real b_scale) {
+    int N = rows(x); matrix[S, N] y_tilde;
+    vector[N] x_ = x - mean(x);    
+    for (s in 1:S) {
+      real alpha = normal_rng(a_loc, a_scale);
+      real beta = normal_rng(b_loc, b_scale);
+      vector[N] eta = alpha + beta * x_;
+      vector[N] mu = exp(eta);
+      for (n in 1:N) 
+        y_tilde[s, n] = poisson_rng(mu[n]);
+    }
+    return y_tilde;  
+  }
+}

@@ -1,0 +1,68 @@
+functions {
+  // modified from Week 1 to only return a row vector of size 2
+  row_vector binormal_rng(real mu_X, real mu_Y, real sigma_X, real sigma_Y, real rho) {
+    real beta = rho * sigma_Y / sigma_X;
+    real sigma = sigma_Y * sqrt(1 - square(rho));
+    real x = normal_rng(mu_X, sigma_X);
+    real y = normal_rng(mu_Y + beta * (x - mu_X), sigma);
+    return [x, y];
+  }
+  
+  // this version adds age
+  matrix selection_rng(int S, vector fmwc, vector age,
+                       vector HS, vector SC, vector CG, vector GD,
+                       vector loc, vector scal) {
+    int N = rows(fmwc);
+    matrix[S, N] draws;
+    vector[N] age2 = square(age);
+    for (s in 1:S) {
+      real alpha_1 = normal_rng(loc[1], scal[1]);
+      real alpha_2 = normal_rng(loc[2], scal[2]);
+      real beta_1  = normal_rng(loc[3], scal[3]);
+      real beta_2  = normal_rng(loc[4], scal[4]);
+      real gamma_HS_1 = normal_rng(loc[5], scal[5]);
+      real gamma_HS_2 = normal_rng(loc[6], scal[6]);
+      real gamma_SC_1 = normal_rng(loc[7], scal[7]);
+      real gamma_SC_2 = normal_rng(loc[8], scal[8]);
+      real gamma_CG_1 = normal_rng(loc[9], scal[9]);
+      real gamma_CG_2 = normal_rng(loc[10], scal[10]);
+      real gamma_GD_1 = normal_rng(loc[11], scal[11]);
+      real gamma_GD_2 = normal_rng(loc[12], scal[12]);
+      real lambda_fmwc_1 = exponential_rng(1) * loc[13];
+      real lambda_fmwc_2 = exponential_rng(1) * loc[14];
+      real theta_fmwc_1 = -lambda_fmwc_1 / 10;
+      real theta_fmwc_2 = -lambda_fmwc_2 / 10;
+      real lambda_other_1 = exponential_rng(1) * loc[15];
+      real lambda_other_2 = exponential_rng(1) * loc[16];
+      real theta_other_1 = -lambda_other_1 / 10;
+      real theta_other_2 = -lambda_other_2 / 10;
+      real rho = uniform_rng(0, 0.3);
+      for (n in 1:N) {
+        row_vector[2] epsilon = binormal_rng(0, 0, 1, 1, rho);
+        real eta_1 = alpha_1 
+                   + fmwc[n] * beta_1
+                   + HS[n] * gamma_HS_1
+                   + SC[n] * gamma_SC_1
+                   + CG[n] * gamma_CG_1
+                   + GD[n] * gamma_GD_1
+                   + (fmwc[n] > 0 ? theta_fmwc_1  * age2[n] + lambda_fmwc_1  * age[n]
+                                  : theta_other_1 * age2[n] + lambda_other_1 * age[n])
+                   + epsilon[1];
+        if (eta_1 < 0) draws[s, n] = -1;
+        else {
+          real eta_2 = alpha_2 
+                     + fmwc[n] * beta_2
+                     + HS[n] * gamma_HS_2
+                     + SC[n] * gamma_SC_2 
+                     + CG[n] * gamma_CG_2
+                     + GD[n] * gamma_GD_2
+                     + (fmwc[n] > 0 ? lambda_fmwc_2  * age2[n] + theta_fmwc_2  * age[n]
+                                    : lambda_other_2 * age2[n] + theta_other_2 * age[n])
+                     + epsilon[2];
+          draws[s, n] = eta_2 > 0;
+        }
+      }
+    }
+    return draws;
+  }
+}

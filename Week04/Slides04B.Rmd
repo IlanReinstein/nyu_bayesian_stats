@@ -1,0 +1,304 @@
+---
+title: "Choosing Prior Distributions"
+author: Ben Goodrich
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+autosize: true
+header-includes:
+   - \usepackage{amsmath}
+   - \usepackage{amssymb}
+   - \usepackage{color}
+output:
+  ioslides_presentation:
+    widescreen: yes
+---
+<style type="text/css">
+slides > slide:not(.nobackground):after {
+  content: '';
+}
+</style>
+
+```{r setup, include=FALSE}
+options(width = 90)
+library(knitr)
+opts_chunk$set(echo = TRUE)
+knit_hooks$set(small.mar = function(before, options, envir) {
+    if (before) par(mar = c(4, 4, .1, .1), las = 1)  # smaller margin on top and right
+})
+
+rstan::expose_stan_functions("residences_rng.stan")
+M <- 2.5; Emu <- 2.7; b <- 1 / (Emu - M); a <- Emu * b
+y <- c(3, 1, 0, 2, 2, 4, 1, 3, 2, 1); S <- 10000; post <- residences_rng(S, M, Emu, y)
+
+rstan::expose_stan_functions("kernel.stan")
+(denom <- integrate(kernel, lower = 0, upper = Inf, M = M, Emu = Emu, y = y)$value)
+```
+
+## Obligatory Disclosure
+
+* Ben is an employee of Columbia University, which has received several research grants to develop Stan
+* Ben is also a manager of GG Statistics LLC, which uses Stan for business purposes
+* According to Columbia University 
+  [policy](https://research.columbia.edu/content/conflict-interest-and-research), any such employee who 
+  has any equity stake in, a title (such as officer or director) with, or is expected to earn at least 
+  $\$5,000.00$ per year from a private company is required to disclose these facts in presentations
+
+## Analytical Posterior PDF
+
+- Gamma prior PDF is again $\color{red}{f\left(\left.\mu\right|a,b\right) = \frac{b^a}{\Gamma\left(a\right)} \mu^{a - 1} e^{-b \mu}}$
+- Poisson PMF for $N$ observations is again $\color{blue}{f\left(\left.y_1,\dots,y_n\right|\mu\right) = e^{-N\mu} \mu^{\sum_{n=1}^N y_n} \prod_{n=1}^N \frac{1}{y_n!}}$
+
+> - Posterior PDF, $\color{purple}{f\left(\left.\mu\right|a,b,y_1,\dots,y_n\right)}$, 
+is proportional to their product:
+$$\color{blue}{\mu^{a - 1} e^{-b \mu}} \color{red}{\mu^{\sum_{n=1}^N y_n} e^{-N\mu}} = 
+\color{purple}{\mu^{a - 1 + \sum_{n=1}^N y_n} e^{-\left(b + N\right)\mu} = 
+\mu^{a^\ast - 1} e^{-b^\ast \mu}},$$ where $a^\ast = a + \sum_{n=1}^N y_n$ and 
+$b^\ast = b + N$
+> - Ergo, the posterior has a Gamma kernel and the normalizing constant is
+$\frac{\left(b^\ast\right)^{a^\ast}}{\Gamma\left(a^\ast\right)}$
+
+## Posterior vs. Prior PDF
+
+```{r, small.mar = TRUE, fig.height=3.5, fig.width=10}
+curve(kernel(mu, M, Emu, y) / denom, from = 0, to = 5, ylab = "PDF of mu", xname = "mu")
+curve(dgamma(mu, a, b), lty = 2, col = 2, add = TRUE, xname = "mu")
+curve(dgamma(mu, a + sum(y), b + length(y)), lty = 3, col = 3, add = TRUE, xname = "mu")
+lines(density(post, from = 0, to = 5), lty = 4, col = 4)
+legend("topleft", legend = c("Posterior", "Prior", "Analytical", "Approximate"), 
+       lty = 1:4, col = 1:4, bg = "lightgrey")
+```
+
+## Posterior Predictive Distribution
+
+- What do you believe a FUTURE outcome will be?
+
+> - Its PDF is $f\left(\left.y\right|a,b,y_1,\dots,y_n\right) = 
+     \int_0^\infty f\left(\left.y,\mu\right|a,b,y_1,\dots,y_n\right)d\mu =$ 
+     $\int_0^\infty \color{blue}{f\left(\left.y\right|\mu\right)}
+     \color{red}{f\left(\left.\mu\right|a,b,y_1,\dots,y_n\right)}d\mu =
+     \int_0^\infty \color{blue}{\frac{e^{-\mu} \mu^{y}}{y!}}
+     \color{red}{\frac{\left(b^\ast\right)^{a^\ast}}{\Gamma\left(a^\ast\right)} \mu^{a^\ast - 1} 
+     e^{-b^\ast \mu}}d\mu =$
+     $\frac{\color{red}{\left(b^\ast\right)^{a^\ast}}}{\color{blue}{y!}\color{red}{\Gamma\left(a^\ast\right)}}
+     \int_0^\infty \color{purple}{\mu^{a^\ast + y - 1} e^{-\left(b^\ast + 1\right)\mu}}d\mu =
+     \frac{\color{red}{\left(b^\ast\right)^{a^\ast}}}{\color{blue}{y!}\color{red}{\Gamma\left(a^\ast\right)}}
+     \color{purple}{\frac{\Gamma\left(a^\ast + y\right)}{\left(b^\ast + 1\right)^{a^\ast + y}}} =
+     \frac{\color{purple}{\Gamma\left(a^\ast + y\right)}}{\color{blue}{y!}\color{red}{\Gamma\left(a^\ast\right)}}
+     \left(\frac{\color{red}{b^\ast}}{\color{purple}{b^\ast + 1}}\right)^{\color{red}{a^\ast}}
+     \frac{1}{\color{purple}{\left(b^\ast + 1\right)^y}}$
+> - This is ONE way to write the PMF for the negative binomial distribution over the non-negative integers, which
+  has expectation $\frac{a^\ast}{b^\ast}$ but variance $\frac{a^\ast}{b^\ast} + \frac{a^\ast}{b^\ast b^\ast}$
+  that is larger than the expectation because you are not certain about $\mu$
+  
+## Drawing from a Posterior Predictive Distribution
+  
+```{r, small.mar = TRUE}
+y_tilde <- rpois(S, post) # R functions that generate random numbers start with r
+barplot(prop.table(table(y_tilde)), ylab = "Posterior Predictive Probability")
+```
+  
+## Four Ways to Execute Bayes Rule
+
+1. Draw from the prior predictive distribution and keep realizations of the parameters iff the realization of
+  the outcome matches the observed data
+    * Very intuitive what is happening but is only possible with discrete outcomes and only feasible with few observations and parameters
+2. Numerically integrate the numerator of Bayes Rule over the parameter(s)
+    * Follows directly from Bayes Rule but is only feasible when there are few parameters and can be inaccurate even with only one parameter
+3. Analytically integrate the numerator of Bayes Rule over the parameter(s)
+    * Makes incremental Bayesian learning obvious but is only possible in simple models when the distribution of the outcome is in the exponential family
+4. Use Stan to perform MCMC to sample from the posterior distribution
+    * Works for any posterior PDF that is differentiable with respect to the parameters but can take a long time
+
+## Quantity of Interest for Bayesians & Frequentists
+
+> - Bayesians are ultimately interested in expectations of the form
+  $\mathbb{E}_{\left.\boldsymbol{\theta}\right|y_1 \dots y_N}g\left(\boldsymbol{\theta}\right) = 
+  \int \dots \int g\left(\boldsymbol{\theta}\right) f\left(\left.\boldsymbol{\theta}\right|y_1 \dots y_N\right)
+  d\theta_1 \dots d\theta_K$
+  where $g\left(\boldsymbol{\theta}\right)$ is some function of the unknown parameters, such as utility for
+  an action, and $f\left(\left.\boldsymbol{\theta}\right|y_1 \dots y_N\right)$ is a posterior PDF for
+  unknown parameters given $y_1 \dots y_N$
+> - Frequentists are ultimately interested in expectations of the form
+  $\mathbb{E}_{\left.Y\right|\boldsymbol{\theta}}h\left(y_1 \dots y_N\right) = 
+  \int \dots \int h\left(y_1 \dots y_N\right) f\left(\left.y_1 \dots y_N\right|\boldsymbol{\theta}\right)
+  dy_1 \dots dy_N$
+  where $h\left(y_1 \dots y_N\right)$ is some function of the data, such as a point estimator of 
+  $\boldsymbol{\theta}$ and $f\left(\left.y_1 \dots y_N\right|\boldsymbol{\theta}\right)$ is a PDF for
+  the data-generating process given $\boldsymbol{\theta}$
+> - If $h\left(\left.y_1 \dots y_N\right|\boldsymbol{\theta}\right) = 
+  \mathbb{I}\{\underline{\theta}\left(y_1 \dots y_N\right) < \theta < 
+  \overline{\theta}\left(y_1 \dots y_N\right)\}$, what estimators 
+  $\underline{\theta}\left(y_1 \dots y_N\right)$ and 
+  $\overline{\theta}\left(y_1 \dots y_N\right)$ imply 
+  $\mathbb{E}_{\left.Y\right|\boldsymbol{\theta}}h\left(y_1 \dots y_N\right) = 0.95$?
+> - If you can derive such functions, $\left[\underline{\theta}\left(y_1 \dots y_N\right), 
+  \overline{\theta}\left(y_1 \dots y_N\right)\right]$ is a $95$% confidence
+  interval estimator of the point $\theta$
+
+## Frequentist Principles (Algorithm 1.4 in Lancaster)
+
+```{r, echo = FALSE, comment = ""}
+cat(readLines("AR1_rng.stan"), sep = "\n")
+```
+```{r}
+rstan::expose_stan_functions("AR1_rng.stan")
+```
+
+## Sampling Distribution of the OLS Estimator of $\rho$
+
+```{r, message = FALSE, fig.height=2, fig.width=10, small.mar = TRUE}
+rho_hat <- AR1_rng(S = 10000L, T = 51, mu = 0, rho = 0.9, sigma = 1)
+plot(density(rho_hat), main = "", xlab = expression(hat(rho))); abline(v = 0.9, col = 2)
+```
+
+The OLS estimator of $\rho$ is biased (downward) because 
+$$\rho \neq \mathbb{E}_{\left.Y\right|\rho}\left[\widehat{\rho}\right] = 
+\int_{-\infty}^\infty \dots \int_{-\infty}^\infty
+\frac{\sum_{t=2}^T y_t y_{t - 1}}{\sum_{t=2}^T y_{t - 1}^2}
+\prod_{t = 2}^T f\left(\left.y_t\right|y_{t - 1}, \mu, \rho, \sigma\right)
+dy_1 \dots dy_T$$
+
+## Important Points from Lancaster Chapter 1
+
+* Statistics vs. Econometrics really is No Model vs. Generative Model
+* Choosing YOUR prior is not fundamentally different from choosing YOUR likelihood (but it can be
+  on behalf of someone else)
+* Writing the normal distribution with $\mu$ and the "precision" $\tau = \frac{1}{\sigma^2}$
+* Simulated data is more useful than wild data
+* Likelihood Principle: "the data that might have been seen but were not are irrelevant!" and
+"Professional opinion is divided on whether inference should adhere to the likelihood principle."
+* Bayesian inference does not require that the data be a "sample" from a well-defined population
+* Identification: "A value $\theta_a$ of a parameter is identified if there is no other value
+$\theta_b$ such that 
+$f\left(\left.y\right|\theta_a\right) = f\left(\left.y\right|\theta_b\right) \forall y \in \Omega$."
+* The chapter appendix with several important probability distributions
+
+## Principles to Choose Priors (and likelihoods) with
+
+1. Do not use improper priors
+2. Subjective
+3. Entropy Maximization
+4. Invariance to reparameterization (particularly scaling)
+5. "Objective" (actually also subjective, but different from 2)
+6. Penalized Complexity (PC) (which we will cover when we get to hierarchical models)
+
+## Do Not Use Improper Priors
+
+- Improper priors are those that do not have a PDF that integrates to 1
+- Thus, you cannot draw from such priors or their prior predictive distributions
+- In some situations, using an improper prior implies
+  that the posterior distribution is improper and thus USELESS for Bayesian inference
+- In other situations, an improper prior yields a proper posterior distribution but you have
+  to work it out on a case-by-case basis
+- Proper priors (that integrate to 1) ALWAYS yield proper posteriors
+- Even if an improper prior yields a proper posterior distribution, the improper prior
+  prelcudes model comparison via Bayes Factors
+- Improper priors can also make things computationally problematic, so they are 
+  discouraged for people who use Stan
+
+## Subjective Priors
+
+- Choose priors to reflect your (or your audience's) beliefs about the parameters
+- This can include eliciting prior information from "experts"
+- http://metalogdistributions.com/publications.html and JQPD.stan
+
+Parameter Space             | Required Inputs (besides $p \thicksim$ Uniform)  | Function Name
+--------------------------- | ------------------------------------------------ | --------------
+$\Theta = \mathbb{R}$       | $\alpha_j = \Pr\left(\theta \leq x_j\right)$ for $j = 1,2,3,4$ | `qnormal_icdf`
+$\Theta = \left(l,u\right)$ | $l, u$, $\alpha = \Pr\left(\theta \leq x_\alpha\right)$, $0.5 = \Pr\left(\theta \leq x_{0.5}\right)$, $1 - \alpha = \Pr\left(\theta \leq x_{1 - \alpha}\right)$ | `JQPDB_icdf`
+$\Theta = \left(l,\infty\right)$  | $l$, moments?, $\alpha = \Pr\left(\theta \leq x_\alpha\right)$, $0.5 = \Pr\left(\theta \leq x_{0.5}\right)$, $1 - \alpha = \Pr\left(\theta \leq x_{1 - \alpha}\right)$ | `JQPDS_icdf` or `JQPDS2_icdf`
+
+## Using Quantile Parameterized Distributions
+
+- Alexa, show me a prior distribution over $\Theta = \left(0,10\right)$ with a first quartile of $\pi$, 
+  a median of $4.8$, and a third quartile of $6.2$
+```{r, echo = FALSE, small.mar = TRUE}
+rstan::expose_stan_functions("JQPD.stan")
+p <- seq(from = 0, to = 1, length.out = 10000)
+theta <- sapply(p, FUN = JQPDB_icdf, alpha = 0.25, l = 0, x_alpha = pi, x_median = 4.8, 
+                x_1malpha = 6.2, u = 10)
+plot(theta, p, type = "l", las = 1, xlab = expression(theta), ylab = "CDF of theta", axes = FALSE)
+axis(1, at = round(c(0, pi, 4.8, 6.2, 10), digits = 2), las = 1)
+axis(2, at = c(0, 0.25, 0.5, 0.75, 1), las = 1)
+segments(x0 = pi, y0 = 0, y1 = 0.25, col = 2, lty = 2)
+segments(x0 = -10, x1 = pi, y0 = 0.25, col = 2, lty = 2)
+segments(x0 = 4.8, y0 = 0, y1 = 0.5, col = 3, lty = 2)
+segments(x0 = -10, x1 = 4.8, y0 = 0.5, col = 3, lty = 2)
+segments(x0 = 6.2, y0 = 0, y1 = 0.75, col = 4, lty = 2)
+segments(x0 = -10, x1 = 6.2, y0 = 0.75, col = 4, lty = 2)
+```
+  
+## Entropy Maximization
+
+* One way of choosing a distribution: Choose $f\left(\left.\theta\right|\cdot\right)$ to maximize
+  $\mathbb{E}\left[-\ln f\left(\left.\theta\right|\cdot\right)\right]$ subject to the restrictions that
+  $\int_\Theta f\left(\left.\theta\right|\cdot\right) d\theta = 1$ and
+  $\int_\Theta g_j\left(\theta\right)f\left(\left.\theta\right|\cdot\right) d\theta = m_j$ for
+  one or more known values of $m_j$ that correspond to the expectation of $g_j\left(\theta\right)$
+* In the discrete case, a uniform distribution reaches the entropy upper bound
+* By analogy, the maximum entropy distribution is the probability distribution "closest" to the
+  uniform distribution while satisfying the constraints
+* In other words, the maximum entropy distribution conveys the least amount of extra information
+  about $\theta$ beyond the information that $\mathbb{E}g_j\left(\theta\right) = m_j$
+* This process can be used to choose priors and / or likelihoods  
+
+## Important Maximimum Entropy Distributions
+
+* If $\Theta$ is some convex set, the maximum entropy distribution is the uniform distribution
+  over $\Theta$. For example, if $\Theta = \left[0,1\right]$, it is the standard uniform distribution
+  with PDF $f\left(\left.\theta\right|a=0,b=1\right) = 1$
+* If $\Theta = \mathbb{R}$, $m_1 = \mu$, and $m_2 = \sigma^2$, then the maximum entropy distribution
+  is the normal distribution. This extends to bivariate and multivariate distributions if you have
+  given covariances.
+* If $\Theta = \mathbb{R}_+$ and $m_1 = \mu$, then the maximum entropy distribution is the 
+  exponential distribution with expectation $\mu = \frac{1}{\lambda}$. You can utilize the
+  fact that the median is $F^{-1}\left(0.5\right) = \mu \ln 2$ to go from the median to $\mu$.
+* The binomial and Poisson distributions are maximum entropy distributions given $\mu$ for
+  their respective $\Omega$
+* Additional examples (often with weird constraints) are given at the bottom of
+  https://en.wikipedia.org/wiki/Maximum_entropy_probability_distribution
+
+## Invariance to Reparameterization
+
+* A Jeffreys prior is proportional to the square root of the Fisher information
+* The Fisher information is defined as $I\left(\theta\right) =$ 
+  $$-\mathbb{E}\left[\frac{\partial^2 \ell\left(\theta; y_1 \dots y_N\right)}
+  {\partial \theta \partial \theta}\right] = 
+  -\int_{\Omega} \dots \int_{\Omega}  \frac{\partial^2 \ell\left(\theta; y_1 \dots y_N\right)}
+  {\partial \theta \partial \theta} f\left(\left.y_1 \dots y_N\right|\theta\right)dy_1 \dots dy_N$$
+  where $\ell\left(\theta; y_1 \dots y_N\right)$ is the log-likelihod of the sample of size $N$
+* Jaynes argued that the Jeffreys prior really only makes sense for a scale parameter and in
+  that case $f\left(\theta\right) \propto \frac{1}{\theta} = \sqrt{I\left(\theta\right)}$,
+  which is improper
+* The Jeffreys prior on a scale parameter is the non-informative prior that conveys the information
+  that the units of $\theta$ convey no substantive information about its value, i.e. the
+  Jeffreys prior is the same whether $\theta$ is in pounds or kilograms
+
+## "Objective" Priors
+
+* "Objective" priors are not actually objective and they all convey some information that
+  you choose to prioritize
+* Reference priors choose $f\left(\left.\theta\right|\cdot\right)$ such that the
+  EXPECTED amount of information in the posterior that is contributed by the prior is minimal
+* Reference priors do not always exist
+* Reference priors can be very odd
+* Reference priors often are the same as Jeffreys prior
+
+## Three "Uninformative" Beta Priors
+
+* The beta distribution is the maximum entropy distribution for a given $\mathbb{E}\ln\theta$
+  and $\mathbb{E}\ln\left(1 - \theta\right)$. If your beliefs are such that
+  $\mathbb{E}\ln\theta = \mathbb{E}\ln\left(1 - \theta\right)$, then $a = 1 = b$ and the
+  beta distribution simplifies to the uniform on $\Theta = \left[0,1\right]$
+* But if the likelihood is binomial, then the posterior is beta with $a^\ast = a + y$
+  and $b^\ast = b + N - y$, so the uniform prior can be seen as adding one success and
+  one failure to the likelihood. This denies that $\theta = 0$ and that $\theta = 1$
+* Haldane thus argued the least informative beta prior was the limit as $a \downarrow 0$
+  and $b \downarrow 0$ at the same rate, which is a uniform prior on the log-odds
+  $\eta = \frac{\theta}{1 - \theta}$
+* Jeffreys argued a reasonable way to construct a prior would convey the same
+  amount of information about $\theta$ as $\eta$, leading to a beta prior with
+  $a = 0.5 = b$
+```{r, echo = FALSE, fig.width=10, fig.height = 2, small.mar = TRUE}
+curve(dbeta(theta, 0.5, 0.5), from = 0, to = 1, cex = 1,
+      ylab = "PDF", xlab = expression(theta), xname = "theta")
+```
